@@ -1,0 +1,5 @@
+fungsi parsing receiver
+membuat objek receiver dan sender yang mudah input output ip dan port
+membuat tulis file ke /out
+membaca file menggunakan path
+bonus

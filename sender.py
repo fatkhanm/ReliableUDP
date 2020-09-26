@@ -23,15 +23,15 @@ class packet():
     
     def increase_seqNo(self):
         self.seq_no +=1
-        return self.seq_no
 
     def create_packet(self,tipe,message=None):
         self.tipe = tipe
         self.data = message
+        self.increase_seqNo()
         if(message):
             self.length = str(len(message))
-        self.checksum = hashlib.sha1(message.encode('utf-8')).hexdigest()
-        return [self.length,self.increase_seqNo(),self.data]
+        #self.checksum = hashlib.sha1(message.encode('utf-8')).hexdigest()
+        return self
         
 #class untuk melakukan file handler
 class file_handler():
@@ -77,11 +77,10 @@ class sender_connection():
     def close_connection(self):
         print('disconnecting to sender')
         self.socket_sender.close()
-    def send_packet_to_sender(self,tipe,msg,address):
+    def send_packet_to_sender(self,packet,address):
         try:
-            data = pickle.dumps([tipe,msg])
             #untuk mendapatkan sequence number
-            self.socket_sender.sendto(data,address)
+            self.socket_sender.sendto(pickle.dumps(packet),address)
             print('sending successfull to Seq_Number: {}'.format(packet.seq_no))
         except Exception as err:
             exception_handler(err)
@@ -89,7 +88,7 @@ class sender_connection():
     def get_packet_from_receiver(self): #melakukan cek apakah sender mendapat ack dari receiver
         packet, address = self.socket_sender.recvfrom(1024)
         data = pickle.loads(packet)
-        if(data[0] == 'ACK'):
+        if(data.tipe == '0x01'):
             return True
         else:
             return False
@@ -113,18 +112,17 @@ if __name__ == "__main__":
         
         #membuat objek sender dan mengkoneksikan ke server
         sender = sender_connection(int(senport))
-        sender.connecting()
-        
-        
+        sender.connecting()          
         #membuat algoritma transfer keseluruh receiver
         for receiver in dataReceiver:
             address = ("127.0.0.1",int(receiver))
             #mengirim filename
-            sender.send_packet_to_sender('S',str(filename),address)
+            msg = packet().create_packet('0x00',filename)
+            sender.send_packet_to_sender(msg,address)
             if(sender.get_packet_from_receiver()):
                 for data in file.read_data():
                     if(sender.get_packet_from_receiver()):
-                        sender.send_packet_to_sender('D',data,address)
-            sender.send_packet_to_sender('T',None,address)
+                        sender.send_packet_to_sender(msg.create_packet('0x00',data),address)
+            sender.send_packet_to_sender(msg.create_packet('0x02','FIN'),address)
                         
         

@@ -24,22 +24,22 @@ class packet():
     
     def increase_seqNo(self):
         self.seq_no +=1
-        return self.seq_no
 
     def create_packet(self,tipe,message=None):
         self.tipe = tipe
         self.data = message
+        self.increase_seqNo()
         if(message):
             self.length = str(len(message))
         self.checksum = hashlib.sha1(message.encode('utf-8')).hexdigest()
-        return [self.length,self.increase_seqNo(),self.data]
+        return self
         
 #class untuk melakukan file handler
 class file_handler():
     fulldata = None
     
     def make_file(self,filename):
-        self.fulldata = open(filename,'wb')
+        self.fulldata = open("out/{}".format(filename),'wb')
     def write_data(self,data):
         self.fulldata.write(base64.b64decode(data))
     def close_write(self):
@@ -68,9 +68,9 @@ class receiver_connection():
     def close_connection(self):
         print('disconnecting to sender')
         self.socket_receiver.close()
-    def send_packet_to_sender(self,tipe,msg,address):
+    def send_packet_to_sender(self,packet,address):
         try:
-            data = pickle.dumps([tipe,msg])
+            data = pickle.dumps(packet)
             #untuk mendapatkan sequence number
             self.socket_receiver.sendto(data,address)
             print('sending successfull to Seq_Number: {}'.format(packet.seq_no))
@@ -79,25 +79,26 @@ class receiver_connection():
     def get_packet_from_sender(self):
         succ = False
         file = file_handler()
+        msg = packet().create_packet('0x01','ACK')
         while(not succ):
-            packet, address = self.socket_receiver.recvfrom(2048)
-            packets = pickle.loads(packet)
+            data, address = self.socket_receiver.recvfrom(2048)
+            packets = pickle.loads(data)
             if(address):
-                print(packets)
-                self.send_packet_to_sender('ACK',"ACK",address)
-                if (packets[0] == 'S'):
-                    namafile = '{}_'.format(address)+'{}'.format(packets[1])
+                print(packets.data)
+                if (packets.tipe == '0x00' and packets.seq_no ==1):
+                    namafile = '{}_'.format(address)+'{}'.format(packets.data)
                     file.make_file(namafile)
+                    self.send_packet_to_sender(msg,address)
+                    self.send_packet_to_sender(msg.create_packet('0x01','ACK'),address)
                     print('kontol filename')
-                    self.send_packet_to_sender('ACK',"ACK",address)
-                if (packets[0] == 'D'):
-                    file.write_data(packets[1])
-                    self.send_packet_to_sender('ACK',"ACK",address)
+                if (packets.tipe == '0x00' and packets.seq_no > 1):
+                    file.write_data(packets.data)
+                    self.send_packet_to_sender(msg.create_packet('0x01','ACK'),address)
                     print('kontol data')
-                if (packets[0] == 'T'):
+                if (packets.tipe == '0x02'):
                     print('transfer success')
                     file.close_write()
-                    self.send_packet_to_sender('ACK',"ACK",address)
+                    self.send_packet_to_sender(msg.create_packet('0x01','ACK'),address)
                     self.close_connection()
                     succ = True
         return succ
